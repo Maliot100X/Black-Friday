@@ -342,11 +342,46 @@ export default function Home() {
             </form>
 
             {/* Quick Stats */}
-            <div className="flex justify-center space-x-12 mt-12">
+            <div className="flex justify-center space-x-12 mt-12 mb-8">
               <div className="text-center">
                 <div className="text-4xl font-bold">{REAL_DEALS.length}+</div>
                 <div className="text-red-200">Активни Понуди</div>
               </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold">{STORES.length}</div>
+                <div className="text-red-200">Продавници</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold">35%</div>
+                <div className="text-red-200">Просечен Попуст</div>
+              </div>
+            </div>
+
+            {/* Download App Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <a
+                href="https://github.com/Maliot100X/Black-Friday/releases/latest/download/MK-Black-Friday-Radar.apk"
+                className="flex items-center gap-3 bg-white text-red-600 px-6 py-3 rounded-xl font-semibold hover:bg-gray-100 transition shadow-lg"
+              >
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993.0001.5511-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0225 3.503c-1.4655-.6407-3.1222-.9997-4.8742-.9997-1.752 0-3.4087.359-4.8742.9997L6.0685 5.4465a.416.416 0 00-.5676-.1521.416.416 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.343 14.6589.343 18.5h23.333c0-3.8411-2.3459-7.3133-5.6029-9.1789" />
+                </svg>
+                <div className="text-left">
+                  <div className="text-xs text-red-500">Download APK</div>
+                  <div className="text-sm">Android App</div>
+                </div>
+              </a>
+              <a
+                href="https://github.com/Maliot100X/Black-Friday/releases"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-white hover:text-red-200 transition"
+              >
+                <span className="text-sm underline">View All Releases</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
               <div className="text-center">
                 <div className="text-4xl font-bold">{STORES.length}+</div>
                 <div className="text-red-200">Продавници</div>

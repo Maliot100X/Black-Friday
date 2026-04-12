@@ -5,7 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatPrice(price: number, currency: string = "USD"): string {
+export function formatPrice(price: number, currency: string = "MKD"): string {
+  if (currency === "MKD") {
+    return `${price.toLocaleString('mk-MK')} ден`;
+  }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency,
