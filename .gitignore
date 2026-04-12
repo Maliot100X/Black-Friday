@@ -47,3 +47,5 @@ chroma.sqlite3
 tmp/
 temp/
 *.tmp
+backend/venv/
+*/venv/
