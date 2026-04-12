@@ -80,3 +80,7 @@ node_modules/
 backend/venv/
 *.so
 node
+backend/venv/
+__pycache__/
+*.pyc
+.env
