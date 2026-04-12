@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
 MK BLACK FRIDAY RADAR - CrewAI Agent Configuration
+Uses Fireworks AI (Kimi K2.5 Turbo) for all LLM operations
 """
 
 from crewai import Agent, Task, Crew, Process
 from crewai.tools import BaseTool
+from crewai.llm import LLM
 from typing import List, Dict, Any
 import sys
 import os
@@ -57,9 +59,11 @@ class QRVerificationTool(BaseTool):
 
 
 class MKBFAgents:
-    """MK Black Friday Radar Agent System"""
+    """MK Black Friday Radar Agent System
+    Uses Fireworks AI (Kimi K2.5 Turbo) for all operations
+    """
 
-    def __init__(self, use_local_llm: bool = True):
+    def __init__(self, use_local_llm: bool = False):
         self.tools = {
             'scraper': ScrapingTool(),
             'vector_search': VectorSearchTool(),
@@ -67,18 +71,21 @@ class MKBFAgents:
             'geo_search': GeoSearchTool(),
             'qr_verify': QRVerificationTool()
         }
-        self.use_local_llm = use_local_llm
+        self.fireworks_api_key = os.getenv("FIREWORKS_API_KEY")
         self.llm_config = self._get_llm_config()
 
     def _get_llm_config(self):
-        """Configure LLM - use Ollama for local deployment"""
-        if self.use_local_llm:
-            return {
-                "model": "ollama/llama3.2",
-                "base_url": "http://localhost:11434",
-                "temperature": 0.7
-            }
-        return None  # Use environment default
+        """Configure Fireworks AI (Kimi K2.5 Turbo)
+        Model: accounts/fireworks/routers/kimi-k2p5-turbo
+        Base URL: https://api.fireworks.ai/inference/v1
+        """
+        return {
+            "model": "accounts/fireworks/routers/kimi-k2p5-turbo",
+            "api_key": self.fireworks_api_key,
+            "base_url": "https://api.fireworks.ai/inference/v1",
+            "temperature": 0.7,
+            "max_tokens": 4096
+        }
 
     def create_scraper_agent(self) -> Agent:
         return Agent(
@@ -242,10 +249,17 @@ class MKBFAgents:
 
 
 def test_agents():
-    """Test the agent system - configuration only (no LLM required)"""
-    print("=== Testing MK BLACK FRIDAY RADAR Agents ===\n")
+    """Test the agent system with Fireworks AI"""
+    print("=== Testing MK BLACK FRIDAY RADAR Agents ===")
+    print("LLM: Fireworks AI (Kimi K2.5 Turbo)\n")
 
-    mkbf = MKBFAgents(use_local_llm=False)  # Skip LLM for config test
+    # Set test API key if not present
+    if not os.getenv("FIREWORKS_API_KEY"):
+        print("⚠️  FIREWORKS_API_KEY not set. Skipping LLM tests.")
+        print("   Set FIREWORKS_API_KEY environment variable to enable AI features.")
+        return
+
+    mkbf = MKBFAgents(use_local_llm=False)
 
     # Test agent configurations
     agents_config = [
@@ -280,7 +294,7 @@ def test_agents():
     except Exception as e:
         print(f"✗ Geo Search: {e}")
 
-    print("\n✓ Agent system configuration complete")
+    print("\n✓ Agent system configuration complete (Fireworks AI)")
 
 
 if __name__ == "__main__":

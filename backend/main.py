@@ -7,9 +7,9 @@ Complete API with JWT authentication, CRUD operations, and RAG integration
 from fastapi import FastAPI, Depends, HTTPException, Query, BackgroundTasks, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, AsyncGenerator
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -19,9 +19,29 @@ import os
 import sys
 import json
 import uuid
+import httpx
+import asyncio
 
 # Add rag to path
 sys.path.insert(0, '/root/mk-black-friday-radar/rag')
+
+# Import PostHog and Sentry if configured
+try:
+    import posthog
+    POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY")
+    if POSTHOG_API_KEY:
+        posthog.api_key = POSTHOG_API_KEY
+        posthog.host = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
+except ImportError:
+    posthog = None
+
+try:
+    import sentry_sdk
+    SENTRY_DSN = os.getenv("SENTRY_DSN")
+    if SENTRY_DSN:
+        sentry_sdk.init(dsn=SENTRY_DSN)
+except ImportError:
+    pass
 
 # Security configuration
 SECRET_KEY = os.getenv("JWT_SECRET", "mkbf-secret-key-change-in-production")
@@ -33,6 +53,56 @@ security = HTTPBearer()
 
 # Database configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql:///?dbname=mkbf_deals&user=postgres")
+
+# Fireworks AI Configuration (Kimi K2.5 Turbo)
+FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
+FIREWORKS_BASE_URL = "https://api.fireworks.ai/inference/v1"
+FIREWORKS_MODEL = "accounts/fireworks/routers/kimi-k2p5-turbo"
+
+# Third-party API Keys
+MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY")
+POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY")
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN")
+CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID")
+R2_S3_ENDPOINT = os.getenv("R2_S3_ENDPOINT", "https://201254e175d52fa10b8112ff89c848c6.r2.cloudflarestorage.com")
+
+# AI Chatbot System Prompts
+CHATBOT_SYSTEM_PROMPT_MK = """Ти си MK Black Friday Radar AI асистент - експерт за пазарување и понуди во Скопје и Северна Македонија.
+
+Твоите клучни задачи:
+1. Помагај на корисниците да најдат најдобри попусти и понуди
+2. Објаснувај каде се наоѓаат продавниците и како до нив
+3. Препорачувај производи врз основа на кориснички преференции
+4. Одговарај на прашања за цени, попусти, и квалитет
+5. Сканирај ја целата апликација за да ги најдеш точните информации
+
+Важни инструкции:
+- Одговарај секогаш на македонски јазик
+- Буди пријателски и професионален
+- Ако не знаеш нешто точно, кажи го тоа
+- Помагај со локални информации за Скопје (карго, гтц, ѕелено пазарче, итн.)
+- Разбирај дека северно-македонските продавници имаат различни работни времиња
+
+Формат на одговор: краток, јасен, корисен."""
+
+CHATBOT_SYSTEM_PROMPT_SQ = """Ju jeni asistenti AI i MK Black Friday Radar - ekspert për blerje dhe oferta në Shkup dhe Maqedoninë e Veriut.
+
+Detyrat tuaja kryesore:
+1. Ndihmoni përdoruesit të gjejnë zbritjet dhe ofertat më të mira
+2. Shpjegoni ku gjenden dyqanet dhe si të arrijnë aty
+3. Rekomandoni produkte bazuar në preferencat e përdoruesit
+4. Përgjigjuni pyetjeve për çmime, zbritje, dhe cilësi
+5. Skanoni të gjithë aplikacionin për të gjetur informacion të saktë
+
+Udhëzimet e rëndësishme:
+- Përgjigjuni gjithmonë në gjuhën shqipe
+- Jini miqësor dhe profesional
+- Nëse nuk dini diçka me siguri, thuajeni atë
+- Ndihmoni me informacione lokale për Shkupin
+- Kupton se dyqanet në Maqedoninë e Veriut kanë orare të ndryshme pune
+
+Formati i përgjigjes: i shkurtër, i qartë, i dobishëm."""
 
 # Initialize FastAPI
 app = FastAPI(
@@ -128,6 +198,32 @@ class RecommendationResponse(BaseModel):
     user_id: int
     recommendations: List[DealResponse]
     based_on: str
+
+# AI Chatbot Models
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="Message role: user or assistant")
+    content: str = Field(..., description="Message content")
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., description="User message")
+    language: str = Field(default="mk", description="Language: mk (Macedonian) or sq (Albanian)")
+    history: Optional[List[ChatMessage]] = Field(default=[], description="Chat history")
+    user_id: Optional[int] = None
+
+class ChatResponse(BaseModel):
+    response: str = Field(..., description="AI response")
+    language: str = Field(..., description="Response language")
+    deals_found: Optional[List[Dict[str, Any]]] = []
+    stores_found: Optional[List[Dict[str, Any]]] = []
+
+# QR Scanner Models
+class QRScanResult(BaseModel):
+    code: str = Field(..., description="Scanned QR code")
+    store_name: Optional[str] = None
+    deal_title: Optional[str] = None
+    discount: Optional[str] = None
+    valid: bool = True
+    message: str = "QR code verified"
 
 # ==================== Database Helper ====================
 
@@ -583,6 +679,254 @@ async def get_recommendations(
         "user_id": current_user['id'],
         "based_on": "trending_discounts",
         "recommendations": [dict(d) for d in deals]
+    }
+
+# ==================== AI Chatbot Endpoints ====================
+
+async def chat_with_fireworks(messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    """Send chat request to Fireworks AI (Kimi K2.5 Turbo)"""
+    if not FIREWORKS_API_KEY:
+        return "⚠️ AI чатботот не е конфигуриран. Контактирајте го администраторот. / Chatboti nuk është konfiguruar. Kontaktoni administratorin."
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"{FIREWORKS_BASE_URL}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {FIREWORKS_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": FIREWORKS_MODEL,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": 2048
+                },
+                timeout=30.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data['choices'][0]['message']['content']
+        except Exception as e:
+            print(f"Fireworks AI Error: {e}")
+            return "Извинете, има проблем со AI услугата. Обидете се повторно. / Më vini keq, ka një problem me shërbimin AI. Provo përsëri."
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_with_ai(request: ChatRequest):
+    """Chat with the MK Black Friday Radar AI Assistant
+    Supports Macedonian (mk) and Albanian (sq) languages
+    """
+    # Select system prompt based on language
+    if request.language.lower() == "sq":
+        system_prompt = CHATBOT_SYSTEM_PROMPT_SQ
+        lang = "sq"
+    else:
+        system_prompt = CHATBOT_SYSTEM_PROMPT_MK
+        lang = "mk"
+
+    # Build message history
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add conversation history
+    if request.history:
+        for msg in request.history[-10:]:  # Keep last 10 messages for context
+            messages.append({"role": msg.role, "content": msg.content})
+
+    # Add current user message
+    messages.append({"role": "user", "content": request.message})
+
+    # Search for relevant deals and stores
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Try to find matching deals based on query keywords
+    search_terms = request.message.lower()
+    deals_found = []
+    stores_found = []
+
+    try:
+        # Search deals
+        cursor.execute("""
+            SELECT d.*, s.name as store_name, s.address
+            FROM deals d
+            JOIN stores s ON d.store_id = s.id
+            WHERE d.is_active = TRUE
+            AND (d.title ILIKE %s OR d.description ILIKE %s OR d.category ILIKE %s)
+            LIMIT 5
+        """, (f"%{search_terms}%", f"%{search_terms}%", f"%{search_terms}%"))
+        deals_found = [dict(d) for d in cursor.fetchall()]
+
+        # Search stores
+        cursor.execute("""
+            SELECT * FROM stores
+            WHERE name ILIKE %s OR category ILIKE %s OR address ILIKE %s
+            LIMIT 5
+        """, (f"%{search_terms}%", f"%{search_terms}%", f"%{search_terms}%"))
+        stores_found = [dict(s) for s in cursor.fetchall()]
+    except Exception as e:
+        print(f"Search error: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+    # Enhance user message with found data
+    if deals_found or stores_found:
+        context = "\n\nПронајдени информации / Informacioni i gjetur:\n"
+        if deals_found:
+            context += f"\nПонуди / Oferta: {len(deals_found)} пронајдени\n"
+            for d in deals_found[:3]:
+                context += f"- {d['title']} ({d['store_name']}): {d['discount_price']} MKD\n"
+        if stores_found:
+            context += f"\nПродавници / Dyqane:\n"
+            for s in stores_found[:3]:
+                context += f"- {s['name']}: {s['address']}\n"
+
+        messages[-1]["content"] += context
+
+    # Track with PostHog if configured
+    if posthog and POSTHOG_API_KEY:
+        try:
+            posthog.capture(
+                distinct_id=str(request.user_id or "anonymous"),
+                event="chatbot_message",
+                properties={
+                    "language": lang,
+                    "has_deals": len(deals_found) > 0,
+                    "has_stores": len(stores_found) > 0
+                }
+            )
+        except:
+            pass
+
+    # Get AI response
+    ai_response = await chat_with_fireworks(messages)
+
+    return ChatResponse(
+        response=ai_response,
+        language=lang,
+        deals_found=deals_found[:3] if deals_found else None,
+        stores_found=stores_found[:3] if stores_found else None
+    )
+
+@app.post("/api/chat/stream")
+async def chat_with_ai_stream(request: ChatRequest):
+    """Stream chat responses from AI"""
+    async def generate() -> AsyncGenerator[str, None]:
+        # Simple non-streaming for now, can be enhanced with SSE
+        response = await chat_with_ai(request)
+        yield f"data: {json.dumps({'response': response.response})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+# ==================== QR Scanner Endpoints ====================
+
+@app.post("/api/qr/scan", response_model=QRScanResult)
+async def scan_qr_code(
+    code: str,
+    store_id: Optional[int] = None,
+    current_user: Dict = Depends(get_current_active_user)
+):
+    """Scan and verify a QR code for deals/stores
+    This is the real QR scanner endpoint that verifies QR codes
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # First, check if it's a user QR code (membership)
+        cursor.execute("""
+            SELECT id, email, first_name, last_name, qr_code FROM users WHERE qr_code = %s
+        """, (code,))
+        user = cursor.fetchone()
+
+        if user:
+            # Record the scan
+            cursor.execute("""
+                INSERT INTO qr_scans (user_id, store_id, qr_code, scan_type, latitude, longitude)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (current_user['id'], store_id, code, 'membership_verify', None, None))
+            conn.commit()
+
+            return QRScanResult(
+                code=code,
+                store_name=None,
+                deal_title=None,
+                valid=True,
+                message=f"Членство потврдено / Anëtarësimi u verifikua: {user['first_name']} {user['last_name']}"
+            )
+
+        # Check if it's a deal QR code
+        cursor.execute("""
+            SELECT d.*, s.name as store_name, s.address
+            FROM deals d
+            JOIN stores s ON d.store_id = s.id
+            WHERE d.qr_code = %s OR d.id::text = %s
+        """, (code, code))
+        deal = cursor.fetchone()
+
+        if deal:
+            # Record the scan
+            cursor.execute("""
+                INSERT INTO qr_scans (user_id, store_id, qr_code, scan_type, deal_id)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (current_user['id'], deal['store_id'], code, 'deal_redemption', deal['id']))
+            conn.commit()
+
+            return QRScanResult(
+                code=code,
+                store_name=deal['store_name'],
+                deal_title=deal['title'],
+                discount=f"{deal['discount_percentage']}%" if deal['discount_percentage'] else None,
+                valid=True,
+                message=f"Понудата е активна / Oferta është aktive: {deal['title']}"
+            )
+
+        # Check if it's a store QR code
+        cursor.execute("""
+            SELECT * FROM stores WHERE qr_code = %s OR id::text = %s
+        """, (code, code))
+        store = cursor.fetchone()
+
+        if store:
+            cursor.execute("""
+                INSERT INTO qr_scans (user_id, store_id, qr_code, scan_type)
+                VALUES (%s, %s, %s, %s)
+            """, (current_user['id'], store['id'], code, 'store_visit'))
+            conn.commit()
+
+            return QRScanResult(
+                code=code,
+                store_name=store['name'],
+                valid=True,
+                message=f"Продавница потврдена / Dyqani u verifikua: {store['name']}"
+            )
+
+        return QRScanResult(
+            code=code,
+            valid=False,
+            message="Невалиден QR код / Kodi QR i pavlefshëm"
+        )
+
+    except Exception as e:
+        print(f"QR scan error: {e}")
+        return QRScanResult(
+            code=code,
+            valid=False,
+            message="Грешка при скенирање / Gabim gjatë skanimit"
+        )
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/qr/generate")
+async def get_user_qr_code(current_user: Dict = Depends(get_current_active_user)):
+    """Get the user's QR code for membership"""
+    return {
+        "user_id": current_user['id'],
+        "qr_code": current_user['qr_code'],
+        "name": f"{current_user.get('first_name', '')} {current_user.get('last_name', '')}".strip(),
+        "valid": True
     }
 
 # ==================== Main Entry Point ====================

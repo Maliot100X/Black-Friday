@@ -10,9 +10,14 @@ langchain==0.3.23
 llama-index==0.12.29
 chromadb==1.1.1
 crewai==0.114.0
+fireworks-ai>=0.15.0
+openai>=1.0.0
 beautifulsoup4==4.13.3
 scrapy==2.15.0
 playwright==1.51.0
 requests==2.33.0
 python-multipart==0.0.20
 python-dotenv==1.1.0
+posthog>=3.0.0
+sentry-sdk>=1.40.0
+httpx>=0.25.0

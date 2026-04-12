@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Search, MapPin, Tag, TrendingDown, Store, User, Menu, X, ShoppingBag } from "lucide-react";
 import { cn, formatPrice, formatDiscount } from "@/lib/utils";
+import FloatingAIChatbot from "@/components/FloatingAIChatbot";
 
 interface Deal {
   id: number;
@@ -371,6 +372,9 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* AI Chatbot */}
+      <FloatingAIChatbot />
     </div>
   );
 }

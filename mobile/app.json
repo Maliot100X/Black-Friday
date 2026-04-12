@@ -9,25 +9,50 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor":="#DC2626"
+      "backgroundColor": "#DC2626"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow MK Black Friday Radar to access your camera to scan QR codes for deals."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow MK Black Friday Radar to use your location to find nearby deals."
+        }
+      ],
+      [
+        "expo-notifications"
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mkblackfriday.app"
+      "bundleIdentifier": "com.mkblackfriday.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for deal verification.",
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to find nearby deals and stores.",
+        "NSLocationAlwaysUsageDescription": "This app uses your location to find nearby deals and stores even when the app is in the background."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor":="#DC2626"
+        "backgroundColor": "#DC2626"
       },
       "package": "com.mkblackfriday.app",
       "permissions": [
-        "CAMERA",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.FOREGROUND_SERVICE"
       ]
     },
     "web": {
@@ -37,6 +62,7 @@
       "eas": {
         "projectId": "mk-black-friday-radar"
       }
-    }
+    },
+    "owner": "maliot100x"
   }
 }
