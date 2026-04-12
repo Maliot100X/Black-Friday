@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: mkbf_postgres
+    environment:
+      POSTGRES_DB: mkbf_deals
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - mkbf_network
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: mkbf_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - mkbf_network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mkbf_backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mkbf_deals
+      - REDIS_URL=redis://redis:6379
+      - CHROMA_DB_PATH=/app/chroma
+      - JWT_SECRET=mkbf-jwt-secret-change-in-production
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./rag/chroma:/app/chroma
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - mkbf_network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mkbf_worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mkbf_deals
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - mkbf_network
+    command: celery -A tasks worker --loglevel=info
+
+  # Celery Beat Scheduler
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mkbf_scheduler
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mkbf_deals
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - mkbf_network
+    command: celery -A tasks beat --loglevel=info
+
+  # ChromaDB Vector Database
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: mkbf_chroma
+    environment:
+      - CHROMA_DB_PATH=/chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./rag/chroma:/chroma
+    networks:
+      - mkbf_network
+
+  # Scrapers Service
+  scrapers:
+    build:
+      context: ./scrapers
+      dockerfile: Dockerfile
+    container_name: mkbf_scrapers
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mkbf_deals
+      - API_URL=http://backend:8000
+    volumes:
+      - ./scrapers:/app
+    depends_on:
+      - postgres
+      - backend
+    networks:
+      - mkbf_network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mkbf_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - mkbf_network
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mkbf_grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - mkbf_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  mkbf_network:
+    driver: bridge
