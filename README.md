@@ -1,6 +1,28 @@
-# MK BLACK FRIDAY RADAR
+# MK BLACK FRIDAY RADAR 🇲🇰
 
 AI-powered deal discovery platform for Black Friday shopping in Skopje, North Macedonia.
+
+[![Web App](https://img.shields.io/badge/Web%20App-Live-blue)](https://mk-black-friday-radar.vercel.app)
+[![APK Download](https://img.shields.io/badge/APK-Download-green)](https://github.com/Maliot100X/Black-Friday/releases)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+## 📱 Download App
+
+- **Android APK**: [Download Latest Release](https://github.com/Maliot100X/Black-Friday/releases/latest)
+- **Web App**: [Live Demo](https://mk-black-friday-radar.vercel.app)
+
+## 🎯 Features
+
+- **🔥 Fireworks AI (Kimi)**: Multilingual AI chatbot in Macedonian & Albanian
+- **🤖 AI Agents**: CrewAI-powered agents for deal scraping, verification, ranking
+- **🔍 RAG Search**: Natural language deal search using ChromaDB vector database
+- **🗺️ Map Radar**: Geographic deal discovery with MapLibre GL
+- **📱 QR Scanner**: Real QR code scanning for store verification
+- **💬 AI Chatbot**: Floating assistant trained on North Macedonia stores
+- **🌐 Web Platform**: Next.js frontend with TailwindCSS
+- **📲 Mobile App**: React Native with Expo for iOS/Android
+- **📊 Analytics**: PostHog integration for user tracking
+- **🐛 Monitoring**: Prometheus, Grafana, and Sentry
 
 ## 🎯 Features
 
