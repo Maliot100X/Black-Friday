@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -27,33 +27,99 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
+        working-directory: ./mobile
         run: |
-          cd mobile
-          npm install
+          npm install --legacy-peer-deps
+
+      - name: Install Expo CLI
+        run: npm install -g expo-cli
 
       - name: Prebuild Android
-        run: |
-          cd mobile
-          npx expo prebuild --platform android
+        working-directory: ./mobile
+        run: npx expo prebuild --platform android
 
       - name: Build APK with Gradle
+        working-directory: ./mobile/android
         run: |
-          cd mobile/android
+          chmod +x ./gradlew
           ./gradlew assembleRelease
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: mobile/android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
+      - name: Rename APK
+        run: |
+          mkdir -p ./apk-release
+          cp mobile/android/app/build/outputs/apk/release/app-release-unsigned.apk ./apk-release/MK-Black-Friday-Radar.apk || \
+          cp mobile/android/app/build/outputs/apk/release/app-release.apk ./apk-release/MK-Black-Friday-Radar.apk
 
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mkbf-android-apk
-          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          name: MK-Black-Friday-Radar-APK
+          path: ./apk-release/*.apk
 
-      - name: Create Release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.run_number }}
-          name: MK Black Friday Radar v${{ github.run_number }}
-          files: mobile/android/app/build/outputs/apk/release/app-release.apk
-          generate_release_notes: true
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: MK Black Friday Radar v${{ github.run_number }}
+          body: |
+            ## MK Black Friday Radar - Android APK
+
+            **Version**: ${{ github.run_number }}
+            **Build Date**: ${{ github.event.head_commit.timestamp }}
+
+            ### Features:
+            - 🔥 AI-powered deal discovery (Fireworks AI - Kimi K2.5 Turbo)
+            - 🇲🇰 Real North Macedonia stores with MKD prices
+            - 💬 Multilingual chatbot (Macedonian & Albanian)
+            - 📱 QR code scanner for store verification
+            - 🗺️ Map radar for nearby deals
+            - 🔐 Real login & registration system
+            - 📍 GPS location tracking
+            - 🔔 Push notifications
+
+            ### Download:
+            Download the APK file below and install on your Android device.
+
+            **Note**: You may need to enable "Install from unknown sources" in your Android settings.
+
+            ### Stores Included:
+            - Anhoch (Скопје)
+            - Neptun (City Mall)
+            - TechnoMarket (Скопје)
+            - Setec (Скопје)
+            - Digital City (Скопје)
+            - Vero (Скопје)
+            - Tinex (Скопје)
+            - Zito Market (Скопје)
+            - Ramos Fashion (Скопје)
+
+            ### API Configuration:
+            The app connects to: `https://api.mkblackfriday.com`
+
+          draft: false
+          prerelease: false
+
+      - name: Upload APK to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./apk-release/MK-Black-Friday-Radar.apk
+          asset_name: MK-Black-Friday-Radar.apk
+          asset_content_type: application/vnd.android.package-archive
