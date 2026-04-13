@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Home, Search, MapPin, Store, User, Bell } from 'lucide-react-native';
 import { View, Text, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@expo/react-native-async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Screens
 import HomeScreen from './screens/HomeScreen';
